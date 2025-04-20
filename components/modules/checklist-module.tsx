@@ -52,8 +52,8 @@ export default function ChecklistModule() {
         // Convert string dates back to Date objects for UI display
         const tasksWithDates = loadedTasks.map((task) => ({
           ...task,
-          // Не преобразуем dueDate в Date, оставляем как строку или null
-          createdAt: task.createdAt,
+          dueDate: task.dueDate ? new Date(task.dueDate) : null, // Преобразуем строку в Date
+          createdAt: new Date(task.createdAt), // Также преобразуем createdAt для консистентности
         }))
         setTasks(tasksWithDates)
       }
@@ -69,8 +69,8 @@ export default function ChecklistModule() {
       // Convert Date objects to strings for storage
       const tasksForStorage = tasks.map((task) => ({
         ...task,
-        dueDate: task.dueDate ? task.dueDate.toISOString() : null,
-        createdAt: task.createdAt.toISOString(),
+        dueDate: task.dueDate ? new Date(task.dueDate).toISOString() : null, // Преобразуем в Date, затем в строку
+        createdAt: new Date(task.createdAt).toISOString(), // Преобразуем createdAt для консистентности
       }))
       saveToStore("tasks", tasksForStorage)
     }
@@ -90,7 +90,7 @@ export default function ChecklistModule() {
       id: Date.now().toString(),
       title: newTask.title,
       priority: newTask.priority,
-      dueDate: newTask.dueDate ? newTask.dueDate.toISOString() : null,
+      dueDate: newTask.dueDate ? new Date(newTask.dueDate).toISOString() : null, // Преобразуем в Date, затем в строку
       status: "pending",
       createdAt: new Date().toISOString(),
     }
@@ -305,7 +305,7 @@ export default function ChecklistModule() {
                       <div className="font-medium">{task.title}</div>
                       {task.dueDate && (
                         <div className="text-sm text-gray-500">
-                          До {format(new Date(task.dueDate), "d MMMM yyyy", { locale: ru })}
+                          До {format(typeof task.dueDate === "string" ? new Date(task.dueDate) : task.dueDate, "d MMMM yyyy", { locale: ru })}
                         </div>
                       )}
                     </div>
