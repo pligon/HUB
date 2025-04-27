@@ -21,6 +21,7 @@ export default function Home() {
   const [keyboardVisible, setKeyboardVisible] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState<"online" | "offline" | "syncing">("offline")
+  const [scrollY, setScrollY] = useState(0)
   const { toast } = useToast()
 
   // Detect keyboard visibility on mobile
@@ -35,6 +36,17 @@ export default function Home() {
       window.addEventListener("resize", detectKeyboard)
       return () => window.removeEventListener("resize", detectKeyboard)
     }
+  }, [])
+
+  // Отслеживание прокрутки для эффекта параллакса
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrollY(window.scrollY)
+      document.documentElement.style.setProperty("--scroll-y", `${window.scrollY}px`)
+    }
+
+    window.addEventListener("scroll", handleScroll)
+    return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
   // Синхронизация с сервером при загрузке
@@ -137,12 +149,37 @@ export default function Home() {
       <div className="absolute bottom-[-10%] left-[-5%] w-[400px] h-[400px] rounded-full bg-[#2a5a41] opacity-40 blur-3xl z-0"></div>
       <div className="absolute top-[30%] left-[40%] w-[300px] h-[300px] rounded-full bg-[#3c6b53] opacity-20 blur-3xl z-0"></div>
 
-      {/* Decorative leaves - more visible and positioned strategically */}
-      <div className="absolute top-[5%] right-[10%] w-[200px] h-[200px] bg-[url('/leaf1.png')] bg-contain bg-no-repeat opacity-30 rotate-45 z-10 pointer-events-none"></div>
-      <div className="absolute bottom-[15%] left-[5%] w-[250px] h-[250px] bg-[url('/leaf2.png')] bg-contain bg-no-repeat opacity-30 -rotate-12 z-10 pointer-events-none"></div>
-      <div className="absolute top-[40%] left-[20%] w-[180px] h-[180px] bg-[url('/leaf1.png')] bg-contain bg-no-repeat opacity-20 rotate-90 z-10 pointer-events-none"></div>
-      <div className="absolute bottom-[40%] right-[15%] w-[220px] h-[220px] bg-[url('/leaf2.png')] bg-contain bg-no-repeat opacity-25 rotate-180 z-10 pointer-events-none hidden md:block"></div>
-      <div className="absolute top-[70%] right-[30%] w-[150px] h-[150px] bg-[url('/leaf1.png')] bg-contain bg-no-repeat opacity-20 rotate-[-45deg] z-10 pointer-events-none hidden md:block"></div>
+      {/* Decorative monstera leaves - с анимацией и эффектами */}
+      <div
+        className="absolute top-[5%] right-[10%] w-[200px] h-[200px] bg-[url('/monstera-leaf.png')] bg-contain bg-no-repeat z-10 pointer-events-none leaf-animation leaf-shadow parallax-leaf parallax-slow"
+        style={{ opacity: 0.3, transform: `rotate(45deg) translateY(${scrollY * -0.05}px)` }}
+      ></div>
+
+      <div
+        className="absolute bottom-[15%] left-[5%] w-[250px] h-[250px] bg-[url('/monstera-leaf.png')] bg-contain bg-no-repeat z-10 pointer-events-none leaf-animation-slow leaf-shadow parallax-leaf parallax-medium"
+        style={{ opacity: 0.3, transform: `rotate(-12deg) translateY(${scrollY * -0.1}px)` }}
+      ></div>
+
+      <div
+        className="absolute top-[40%] left-[20%] w-[180px] h-[180px] bg-[url('/monstera-leaf.png')] bg-contain bg-no-repeat z-10 pointer-events-none leaf-animation-large leaf-shadow parallax-leaf parallax-fast"
+        style={{ opacity: 0.2, transform: `rotate(90deg) translateY(${scrollY * -0.15}px)` }}
+      ></div>
+
+      <div
+        className="absolute bottom-[40%] right-[15%] w-[220px] h-[220px] bg-[url('/monstera-leaf.png')] bg-contain bg-no-repeat z-10 pointer-events-none leaf-animation leaf-shadow parallax-leaf parallax-medium hidden md:block"
+        style={{ opacity: 0.25, transform: `rotate(180deg) translateY(${scrollY * -0.1}px)` }}
+      ></div>
+
+      <div
+        className="absolute top-[70%] right-[30%] w-[150px] h-[150px] bg-[url('/monstera-leaf.png')] bg-contain bg-no-repeat z-10 pointer-events-none leaf-animation-slow leaf-shadow parallax-leaf parallax-slow hidden md:block"
+        style={{ opacity: 0.2, transform: `rotate(-45deg) translateY(${scrollY * -0.05}px)` }}
+      ></div>
+
+      {/* Интерактивный лист с эффектом при наведении */}
+      <div
+        className="absolute top-[20%] right-[25%] w-[120px] h-[120px] bg-[url('/monstera-leaf.png')] bg-contain bg-no-repeat z-10 leaf-hover-effect leaf-shadow"
+        style={{ opacity: 0.4, transform: `rotate(15deg)` }}
+      ></div>
 
       {/* Mobile sidebar toggle */}
       {isMobile && (

@@ -305,7 +305,12 @@ export default function ChecklistModule() {
                       <div className="font-medium">{task.title}</div>
                       {task.dueDate && (
                         <div className="text-sm text-gray-500">
-                          До {format(typeof task.dueDate === "string" ? new Date(task.dueDate) : task.dueDate, "d MMMM yyyy", { locale: ru })}
+                          До{" "}
+                          {format(
+                            typeof task.dueDate === "string" ? new Date(task.dueDate) : task.dueDate,
+                            "d MMMM yyyy",
+                            { locale: ru },
+                          )}
                         </div>
                       )}
                     </div>

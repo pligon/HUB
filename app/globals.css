@@ -99,3 +99,110 @@
 .decorative-leaf {
   @apply absolute bg-contain bg-no-repeat pointer-events-none z-10;
 }
+
+/* Monstera leaf animations and effects */
+@keyframes leafSway {
+  0% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(1.5deg);
+  }
+  50% {
+    transform: rotate(0deg);
+  }
+  75% {
+    transform: rotate(-1.5deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes leafSwayLarge {
+  0% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(2.5deg);
+  }
+  50% {
+    transform: rotate(0deg);
+  }
+  75% {
+    transform: rotate(-2.5deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes leafFloat {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.leaf-animation {
+  transform-origin: bottom center;
+  animation: leafSway 10s ease-in-out infinite;
+  transition: all 0.5s ease;
+}
+
+.leaf-animation-slow {
+  transform-origin: bottom center;
+  animation: leafSway 15s ease-in-out infinite;
+  transition: all 0.5s ease;
+}
+
+.leaf-animation-large {
+  transform-origin: bottom center;
+  animation: leafSwayLarge 12s ease-in-out infinite;
+  transition: all 0.5s ease;
+}
+
+.leaf-float {
+  animation: leafFloat 12s ease-in-out infinite;
+}
+
+/* Hover effects for monstera leaves */
+.leaf-hover-effect {
+  transition: all 0.5s ease;
+}
+
+.leaf-hover-effect:hover {
+  filter: brightness(1.1) saturate(1.2);
+  transform: scale(1.05) rotate(2deg);
+}
+
+/* Scroll-based parallax effect */
+.parallax-leaf {
+  transition: transform 0.5s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.parallax-slow {
+  transform: translateY(calc(var(--scroll-y, 0) * -0.05));
+}
+
+.parallax-medium {
+  transform: translateY(calc(var(--scroll-y, 0) * -0.1));
+}
+
+.parallax-fast {
+  transform: translateY(calc(var(--scroll-y, 0) * -0.15));
+}
+
+/* Leaf shadow effect */
+.leaf-shadow {
+  filter: drop-shadow(0 10px 8px rgb(0 0 0 / 0.04)) drop-shadow(0 4px 3px rgb(0 0 0 / 0.1));
+}
+
+.leaf-shadow:hover {
+  filter: drop-shadow(0 20px 13px rgb(0 0 0 / 0.08)) drop-shadow(0 8px 5px rgb(0 0 0 / 0.12));
+}
