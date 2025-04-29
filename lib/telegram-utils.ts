@@ -1,5 +1,7 @@
 import { supabase } from "./supabase"
 import type { RegistrationResponse } from "./types/telegram-types"
+import type { Employee } from "./types/employee-types" // Добавлено определение типа Employee
+import { formatDate } from "./utils" // Добавлена функция formatDate
 
 // Токен Telegram бота
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "7728971043:AAFAzIWUNCQN1OI5dFxFpDmJc-45SUBlwoA"
@@ -157,4 +159,65 @@ export async function generateRegistrationCodeForEmployee(employeeId: string): P
     console.error("Error in generateRegistrationCodeForEmployee:", error)
     return null
   }
+}
+
+// Функция для отправки сообщения сотруднику по chat_id
+export async function sendMessageToEmployee(chatId: number, message: string): Promise<boolean> {
+  if (!chatId) {
+    console.error("Не указан chat_id для отправки сообщения")
+    return false
+  }
+
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+        parse_mode: "HTML",
+      }),
+    })
+
+    const data = await response.json()
+
+    if (!data.ok) {
+      console.error("Ошибка при отправке сообщения в Telegram:", data.description)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error("Ошибка при отправке сообщения в Telegram:", error)
+    return false
+  }
+}
+
+// Обновляем функцию sendScheduleNotification, чтобы использовать chat_id
+export async function sendScheduleNotification(employee: Employee, date: string, isWorkDay: boolean): Promise<boolean> {
+  if (!employee.chat_id) {
+    console.error(`Сотрудник ${employee.name} не имеет chat_id для отправки уведомления`)
+    return false
+  }
+
+  const formattedDate = formatDate(date)
+  const message = isWorkDay
+    ? `🔔 <b>Напоминание о рабочем дне</b>\n\nДобрый день, ${employee.name}!\n\nНапоминаем, что завтра (${formattedDate}) у вас <b>рабочий день</b>.\n\nХорошего дня!`
+    : `🔔 <b>Напоминание о выходном дне</b>\n\nДобрый день, ${employee.name}!\n\nЗавтра (${formattedDate}) у вас <b>выходной</b>.\n\nПриятного отдыха!`
+
+  return sendMessageToEmployee(employee.chat_id, message)
+}
+
+// Обновляем функцию sendScheduleReadyNotification, чтобы использовать chat_id
+export async function sendScheduleReadyNotification(employee: Employee): Promise<boolean> {
+  if (!employee.chat_id) {
+    console.error(`Сотрудник ${employee.name} не имеет chat_id для отправки уведомления`)
+    return false
+  }
+
+  const message = `🗓 <b>График на следующую неделю готов</b>\n\nДобрый день, ${employee.name}!\n\nГрафик работы на следующую неделю уже доступен в системе.\n\nПожалуйста, ознакомьтесь с вашим расписанием.`
+
+  return sendMessageToEmployee(employee.chat_id, message)
 }

@@ -66,8 +66,8 @@ export const generateSchedule = (
   weekDates: Date[],
   settings: ScheduleSettings,
 ): ScheduleEntry[] => {
-  // Максимальное количество попыток генерации
-  const maxAttempts = settings.maxGenerationAttempts
+  // Максимальное количество попыток генерации (используем 10 по умолчанию)
+  const maxAttempts = 10
   let bestSchedule: ScheduleEntry[] = []
   let bestScore = -1
 

@@ -10,8 +10,7 @@ import ChecklistModule from "@/components/modules/checklist-module"
 import SchoolModule from "@/components/modules/school-module"
 import ScheduleModule from "@/components/modules/schedule-module"
 import { useMobile } from "@/hooks/use-mobile"
-import { syncWithServer, isSupabaseAvailable } from "@/lib/db"
-import { useToast } from "@/hooks/use-toast"
+import { useSync } from "@/lib/sync-context"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export default function Home() {
@@ -19,10 +18,8 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const isMobile = useMobile()
   const [keyboardVisible, setKeyboardVisible] = useState(false)
-  const [isSyncing, setIsSyncing] = useState(false)
-  const [syncStatus, setSyncStatus] = useState<"online" | "offline" | "syncing">("offline")
   const [scrollY, setScrollY] = useState(0)
-  const { toast } = useToast()
+  const { isSyncing, syncStatus, lastSyncTime, manualSync } = useSync()
 
   // Detect keyboard visibility on mobile
   useEffect(() => {
@@ -49,58 +46,27 @@ export default function Home() {
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
-  // Синхронизация с сервером при загрузке
-  useEffect(() => {
-    const initialSync = async () => {
-      setIsSyncing(true)
-      setSyncStatus("syncing")
-      try {
-        const success = await syncWithServer()
-        setSyncStatus(success ? "online" : "offline")
-      } catch (error) {
-        console.error("Error during initial sync:", error)
-        setSyncStatus("offline")
-      } finally {
-        setIsSyncing(false)
-      }
-    }
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen)
+  }
 
-    initialSync()
+  // Форматирование времени последней синхронизации
+  const formatLastSyncTime = () => {
+    if (!lastSyncTime) return "Никогда"
 
-    // Периодическая проверка статуса соединения
-    const checkConnectionInterval = setInterval(() => {
-      setSyncStatus(isSupabaseAvailable() ? "online" : "offline")
-    }, 30000) // Проверка каждые 30 секунд
+    const now = new Date()
+    const diffMs = now.getTime() - lastSyncTime.getTime()
+    const diffSec = Math.floor(diffMs / 1000)
 
-    return () => clearInterval(checkConnectionInterval)
-  }, [])
+    if (diffSec < 60) return `${diffSec} сек. назад`
 
-  // Функция для ручной синхронизации
-  const handleSync = async () => {
-    setIsSyncing(true)
-    setSyncStatus("syncing")
-    try {
-      const success = await syncWithServer()
-      setSyncStatus(success ? "online" : "offline")
+    const diffMin = Math.floor(diffSec / 60)
+    if (diffMin < 60) return `${diffMin} мин. назад`
 
-      toast({
-        title: success ? "Синхронизация завершена" : "Синхронизация не удалась",
-        description: success
-          ? "Данные успешно синхронизированы с сервером"
-          : "Не удалось подключиться к серверу. Приложение работает в автономном режиме.",
-        variant: success ? "default" : "destructive",
-      })
-    } catch (error) {
-      console.error("Error during manual sync:", error)
-      setSyncStatus("offline")
-      toast({
-        title: "Ошибка синхронизации",
-        description: "Не удалось синхронизировать данные с сервером. Приложение работает в автономном режиме.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsSyncing(false)
-    }
+    const diffHour = Math.floor(diffMin / 60)
+    if (diffHour < 24) return `${diffHour} ч. назад`
+
+    return lastSyncTime.toLocaleString("ru-RU")
   }
 
   const modules = [
@@ -129,10 +95,6 @@ export default function Home() {
       component: <SchoolModule />,
     },
   ]
-
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen)
-  }
 
   return (
     <div
@@ -227,7 +189,7 @@ export default function Home() {
                 <Button
                   variant="ghost"
                   className="w-full justify-start text-white/80 hover:bg-[#3c6b53]/50"
-                  onClick={handleSync}
+                  onClick={manualSync}
                   disabled={isSyncing}
                 >
                   {syncStatus === "online" ? (
@@ -248,7 +210,7 @@ export default function Home() {
               </TooltipTrigger>
               <TooltipContent>
                 {syncStatus === "online"
-                  ? "Данные синхронизированы с сервером"
+                  ? `Данные синхронизированы с сервером. Последняя синхронизация: ${formatLastSyncTime()}`
                   : syncStatus === "syncing"
                     ? "Выполняется синхронизация данных"
                     : "Нет подключения к серверу. Приложение работает в автономном режиме."}

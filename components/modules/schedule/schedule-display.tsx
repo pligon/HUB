@@ -446,6 +446,26 @@ export default function ScheduleDisplay({
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
+              <Label htmlFor="min-employees">Минимальное количество сотрудников в день</Label>
+              <Input
+                id="min-employees"
+                type="number"
+                min="1"
+                max="20"
+                value={editedSettings.minEmployeesPerDay}
+                onChange={(e) =>
+                  setEditedSettings({
+                    ...editedSettings,
+                    minEmployeesPerDay: Number(e.target.value) || 3,
+                  })
+                }
+              />
+              <p className="text-xs text-gray-500">
+                Минимальное количество сотрудников, которые должны работать каждый день
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="exact-employees">Точное количество сотрудников в день</Label>
               <Input
                 id="exact-employees"
@@ -461,28 +481,7 @@ export default function ScheduleDisplay({
                 }
               />
               <p className="text-xs text-gray-500">
-                Точное количество сотрудников с гибким графиком, которые должны работать каждый день (не больше и не
-                меньше)
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="max-attempts">Количество попыток на поиск лучшего варианта</Label>
-              <Input
-                id="max-attempts"
-                type="number"
-                min="1"
-                max="100"
-                value={editedSettings.maxGenerationAttempts}
-                onChange={(e) =>
-                  setEditedSettings({
-                    ...editedSettings,
-                    maxGenerationAttempts: Number(e.target.value) || 10,
-                  })
-                }
-              />
-              <p className="text-xs text-gray-500">
-                Сколько раз система будет пытаться сгенерировать оптимальный график
+                Точное количество сотрудников, которые должны работать каждый день
               </p>
             </div>
 

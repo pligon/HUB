@@ -1,45 +1,87 @@
 import { createClient } from "@supabase/supabase-js"
 
-// Флаг, указывающий, доступен ли Supabase
-let isSupabaseAvailable = false
-
-// Создаем клиент Supabase с переменными окружения
+// Инициализация Supabase клиента
 export const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || "",
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
 )
 
-// Проверка доступности Supabase
-export const checkSupabaseAvailability = async (): Promise<boolean> => {
+// Add a new supabaseAdmin client with service role capabilities
+// This should be placed right after the regular supabase client initialization
+
+// Инициализация Supabase клиента с сервисной ролью для обхода RLS
+export const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
+  {
+    auth: {
+      persistSession: false,
+    },
+  },
+)
+
+// Функция для проверки доступности Supabase
+export async function checkSupabaseAvailability(): Promise<boolean> {
   try {
-    // Пробуем выполнить простой запрос
-    const { data, error } = await supabase.from("health_check").select("*").limit(1).maybeSingle()
-
-    // Если ошибка связана с отсутствием таблицы, но соединение работает, это нормально
-    if (error && error.code === "PGRST116") {
-      isSupabaseAvailable = true
-      return true
-    }
-
-    // Если другая ошибка, считаем, что Supabase недоступен
+    const { data, error } = await supabase.from("employees").select("count").limit(1)
     if (error) {
-      console.warn("Supabase is not available:", error.message)
-      isSupabaseAvailable = false
+      console.error("Supabase availability check failed:", error.message)
       return false
     }
-
-    isSupabaseAvailable = true
     return true
   } catch (error) {
-    console.warn("Error checking Supabase availability:", error)
-    isSupabaseAvailable = false
+    console.error("Supabase availability check failed:", error)
     return false
   }
 }
 
-// Функция для проверки, доступен ли Supabase
-export const getSupabaseAvailability = (): boolean => {
-  return isSupabaseAvailable
+// Функция для проверки доступности Supabase (синхронная версия)
+export function getSupabaseAvailability(): boolean {
+  return true // Всегда возвращаем true, так как мы теперь всегда используем Supabase
+}
+
+// Функция для настройки подписок на изменения в реальном времени
+export function setupRealtimeSubscriptions(
+  tables: string[],
+  onInsert: (payload: any) => void,
+  onUpdate: (payload: any) => void,
+  onDelete: (payload: any) => void,
+): () => void {
+  const channel = supabase
+    .channel("schema-db-changes")
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: tables,
+      },
+      (payload) => onInsert(payload),
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: tables,
+      },
+      (payload) => onUpdate(payload),
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "DELETE",
+        schema: "public",
+        table: tables,
+      },
+      (payload) => onDelete(payload),
+    )
+    .subscribe()
+
+  // Возвращаем функцию для отписки
+  return () => {
+    supabase.removeChannel(channel)
+  }
 }
 
 // Типы для таблиц Supabase
@@ -63,14 +105,18 @@ export type SupabaseEmployee = {
   id: string
   name: string
   color: string
-  work_schedule: "5/2" | "flexible" | "fixed"
-  min_work_days: number
+  telegram_username?: string
   max_work_days: number
   min_off_days: number
-  max_off_days: number
-  fixed_work_days?: number[] // Дни недели (0-6), когда сотрудник работает (для фиксированного графика)
-  fixed_off_days?: number[] // Дни недели (0-6), когда у сотрудника выходной (для фиксированного графика)
+  work_day_reminder_time?: string
+  schedule_ready_reminder_time?: string
+  schedule_ready_reminder_day?: number
+  work_schedule_mode: "5/2" | "flexible" | "fixed"
+  fixed_work_days?: number[]
+  fixed_off_days?: number[]
+  password?: string
   is_admin: boolean
+  registration_code?: string
   created_at?: string
 }
 
@@ -85,9 +131,23 @@ export type SupabaseDayPreference = {
 
 export type SupabaseScheduleEntry = {
   id: string
-  date: string
   employee_id: string
-  status: 0 | 1 | 11 // 0 = выходной, 1 = рабочий, 11 = сокращенный
+  date: string
+  status: 0 | 1 | 11
+  hours?: number
+  created_at?: string
+}
+
+export type SupabaseScheduleSettings = {
+  id: string
+  min_employees_per_day: number
+  // Поддерживаем все возможные имена колонок
+  employees_per_day?: number
+  max_generation_attempts?: number
+  exact_employees_per_day?: number
+  auto_generation_enabled: boolean
+  auto_generation_day: number
+  auto_generation_time: string
   created_at?: string
 }
 
@@ -109,144 +169,128 @@ export type SupabaseSettings = {
   created_at?: string
 }
 
-// Функция для синхронизации данных с Supabase
-export const syncWithSupabase = async <T, U>(
-  localData: T[],
-  tableName: string,
-  transformToSupabase: (item: T) => U,
-  transformFromSupabase: (item: U) => T,
-): Promise<T[]> => {
-  // Если Supabase недоступен, возвращаем локальные данные
-  if (!isSupabaseAvailable) {
-    return localData
-  }
+// Функция для обработки ошибок Supabase
+export function handleSupabaseError(error: any, operation: string): void {
+  console.error(`Error during ${operation}:`, error)
+}
 
+// Generic function to sync data with Supabase
+export async function syncWithSupabase<LocalType, SupabaseType>(
+  localItems: LocalType[],
+  tableName: string,
+  mapToSupabase: (item: LocalType) => SupabaseType,
+  mapToLocal: (item: SupabaseType) => LocalType,
+): Promise<LocalType[]> {
   try {
-    // Загружаем данные с сервера
-    const { data: remoteData, error } = await supabase
-      .from(tableName)
-      .select("*")
-      .order("created_at", { ascending: false })
+    // Проверяем доступность Supabase
+    if (!getSupabaseAvailability()) {
+      console.warn(`Supabase is not available, skipping sync for ${tableName}`)
+      return localItems // Возвращаем локальные данные без изменений
+    }
+
+    // 1. Получаем данные из Supabase
+    const { data, error } = await supabase.from(tableName).select("*")
 
     if (error) {
-      console.error(`Error fetching data from ${tableName}:`, error)
-      return localData
+      handleSupabaseError(error, `fetching ${tableName} from Supabase`)
+      return localItems
     }
 
-    // Если есть данные на сервере, используем их
-    if (remoteData && remoteData.length > 0) {
-      return remoteData.map(transformFromSupabase)
-    }
+    const supabaseItems: SupabaseType[] = data as SupabaseType[]
 
-    // Если на сервере нет данных, но есть локальные данные, загружаем их на сервер
-    if (localData.length > 0) {
-      const supabaseData = localData.map(transformToSupabase)
-      const { error: insertError } = await supabase.from(tableName).insert(supabaseData)
+    // 2. Определяем, какие элементы нужно добавить, обновить или удалить
+    const localItemIds = new Set(localItems.map((item: any) => item.id))
+    const supabaseItemIds = new Set(supabaseItems.map((item: any) => item.id))
 
-      if (insertError) {
-        console.error(`Error inserting data to ${tableName}:`, insertError)
+    const itemsToAdd = localItems.filter((item: any) => !supabaseItemIds.has(item.id))
+    const itemsToUpdate = localItems.filter((item: any) => supabaseItemIds.has(item.id))
+    const itemsToDelete = supabaseItems.filter((item: any) => !localItemIds.has(item.id))
+
+    // 3. Выполняем операции с Supabase
+    for (const item of itemsToAdd) {
+      const { error } = await supabase.from(tableName).insert([mapToSupabase(item)])
+      if (error) {
+        handleSupabaseError(error, `adding to ${tableName}`)
       }
     }
 
-    return localData
+    for (const item of itemsToUpdate) {
+      const { error } = await supabase
+        .from(tableName)
+        .update(mapToSupabase(item))
+        .eq("id", (item as any).id)
+      if (error) {
+        handleSupabaseError(error, `updating in ${tableName}`)
+      }
+    }
+
+    for (const item of itemsToDelete) {
+      const { error } = await supabase
+        .from(tableName)
+        .delete()
+        .eq("id", (item as any).id)
+      if (error) {
+        handleSupabaseError(error, `deleting from ${tableName}`)
+      }
+    }
+
+    // 4. Получаем обновленные данные из Supabase
+    const { data: updatedData, error: updatedError } = await supabase.from(tableName).select("*")
+
+    if (updatedError) {
+      handleSupabaseError(updatedError, `fetching updated ${tableName} from Supabase`)
+      return localItems
+    }
+
+    const updatedSupabaseItems: SupabaseType[] = updatedData as SupabaseType[]
+
+    // 5. Преобразуем данные Supabase в локальный формат
+    const syncedItems: LocalType[] = updatedSupabaseItems.map(mapToLocal)
+
+    return syncedItems
   } catch (error) {
-    console.error(`Error syncing with Supabase for ${tableName}:`, error)
-    return localData
+    handleSupabaseError(error, `syncing with ${tableName}`)
+    return localItems
   }
 }
 
-// Функция для сохранения данных в Supabase
-export const saveToSupabase = async <T, U>(
-  data: T[],
+// Generic function to save items to Supabase
+export async function saveToSupabase<LocalType, SupabaseType>(
+  items: LocalType[],
   tableName: string,
-  transformToSupabase: (item: T) => U,
-): Promise<boolean> => {
-  // Если Supabase недоступен, пропускаем сохранение
-  if (!isSupabaseAvailable) {
-    return false
-  }
-
+  mapToSupabase: (item: LocalType) => SupabaseType,
+): Promise<boolean> {
   try {
-    // Сначала удаляем все существующие записи
-    const { error: deleteError } = await supabase.from(tableName).delete().not("id", "is", null) // Удаляем все записи
-
-    if (deleteError) {
-      console.error(`Error deleting data from ${tableName}:`, deleteError)
+    // Проверяем доступность Supabase
+    if (!getSupabaseAvailability()) {
+      console.warn(`Supabase is not available, skipping saveToSupabase for ${tableName}`)
       return false
     }
 
-    // Затем вставляем новые данные
-    if (data.length > 0) {
-      const supabaseData = data.map(transformToSupabase)
-      const { error: insertError } = await supabase.from(tableName).insert(supabaseData)
+    // 1. Преобразуем элементы в формат Supabase
+    const supabaseItems: SupabaseType[] = items.map(mapToSupabase)
+
+    // 2. Удаляем все существующие записи
+    const { error: deleteError } = await supabase.from(tableName).delete().not("id", "is", null)
+
+    if (deleteError) {
+      handleSupabaseError(deleteError, `deleting existing records from ${tableName}`)
+      return false
+    }
+
+    // 3. Вставляем новые записи
+    if (supabaseItems.length > 0) {
+      const { error: insertError } = await supabase.from(tableName).insert(supabaseItems)
 
       if (insertError) {
-        console.error(`Error inserting data to ${tableName}:`, insertError)
+        handleSupabaseError(insertError, `inserting new records into ${tableName}`)
         return false
       }
     }
 
     return true
   } catch (error) {
-    console.error(`Error saving to Supabase for ${tableName}:`, error)
-    return false
-  }
-}
-
-// Функция для получения настроек из Supabase
-export const getSettings = async (key: string): Promise<any | null> => {
-  // Если Supabase недоступен, возвращаем null
-  if (!isSupabaseAvailable) {
-    return null
-  }
-
-  try {
-    const { data, error } = await supabase.from("settings").select("value").eq("key", key).single()
-
-    if (error) {
-      console.error(`Error fetching setting ${key}:`, error)
-      return null
-    }
-
-    return data?.value
-  } catch (error) {
-    console.error(`Error getting setting ${key}:`, error)
-    return null
-  }
-}
-
-// Функция для сохранения настроек в Supabase
-export const saveSettings = async (key: string, value: any): Promise<boolean> => {
-  // Если Supabase недоступен, пропускаем сохранение
-  if (!isSupabaseAvailable) {
-    return false
-  }
-
-  try {
-    // Проверяем, существует ли настройка
-    const { data } = await supabase.from("settings").select("id").eq("key", key).single()
-
-    if (data) {
-      // Обновляем существующую настройку
-      const { error } = await supabase.from("settings").update({ value }).eq("key", key)
-
-      if (error) {
-        console.error(`Error updating setting ${key}:`, error)
-        return false
-      }
-    } else {
-      // Создаем новую настройку
-      const { error } = await supabase.from("settings").insert({ key, value })
-
-      if (error) {
-        console.error(`Error inserting setting ${key}:`, error)
-        return false
-      }
-    }
-
-    return true
-  } catch (error) {
-    console.error(`Error saving setting ${key}:`, error)
+    handleSupabaseError(error, `saving to ${tableName}`)
     return false
   }
 }

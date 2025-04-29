@@ -20,6 +20,7 @@ import { format } from "date-fns"
 import { ru } from "date-fns/locale"
 import { CalendarIcon, LogIn, LogOut, ChevronLeft, ChevronRight, Settings } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { useSync } from "@/lib/sync-context"
 
 import type { Employee, DayPreference, ScheduleEntry, ScheduleSettings } from "@/lib/types/schedule-types"
 import { getWeekDates, getPreviousWeek, getNextWeek } from "@/lib/schedule-utils"
@@ -34,6 +35,7 @@ import {
   saveScheduleSettings,
   createDefaultScheduleSettings,
 } from "@/lib/db-schedule"
+import { setupRealtimeSubscriptions, checkSupabaseAvailability } from "@/lib/supabase"
 
 import EmployeeManagement from "./schedule/employee-management"
 import DayOffSelection from "./schedule/day-off-selection"
@@ -55,12 +57,16 @@ export default function ScheduleModule() {
   const [activeTab, setActiveTab] = useState("preferences")
   const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()
+  const { isSyncing } = useSync() // Используем контекст синхронизации
 
   // Загрузка данных при монтировании компонента
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true)
       try {
+        // Проверяем доступность Supabase
+        await checkSupabaseAvailability()
+
         // Загрузка сотрудников
         const loadedEmployees = await loadEmployees()
         setEmployees(loadedEmployees)
@@ -96,6 +102,136 @@ export default function ScheduleModule() {
     }
 
     loadData()
+
+    // Настройка подписок на изменения в реальном времени
+    const unsubscribe = setupRealtimeSubscriptions(
+      ["employees", "day_preferences", "schedule_entries", "schedule_settings"],
+      (payload) => {
+        // Обработка вставки новых данных
+        if (payload.table === "employees") {
+          const newEmployee = {
+            id: payload.new.id,
+            name: payload.new.name,
+            color: payload.new.color,
+            telegramUsername: payload.new.telegram_username,
+            maxWorkDays: payload.new.max_work_days,
+            minOffDays: payload.new.min_off_days,
+            workDayReminderTime: payload.new.work_day_reminder_time,
+            scheduleReadyReminderTime: payload.new.schedule_ready_reminder_time,
+            scheduleReadyReminderDay: payload.new.schedule_ready_reminder_day,
+            workScheduleMode: payload.new.work_schedule_mode,
+            fixedWorkDays: payload.new.fixed_work_days,
+            fixedOffDays: payload.new.fixed_off_days,
+            password: payload.new.password,
+            isAdmin: payload.new.is_admin,
+            createdAt: payload.new.created_at,
+          }
+          setEmployees((prev) => [...prev.filter((e) => e.id !== newEmployee.id), newEmployee])
+        } else if (payload.table === "day_preferences") {
+          const newPreference = {
+            id: payload.new.id,
+            employeeId: payload.new.employee_id,
+            date: payload.new.date,
+            dayOfWeek: payload.new.day_of_week,
+            isPreferred: payload.new.is_preferred,
+            createdAt: payload.new.created_at,
+          }
+          setDayPreferences((prev) => [...prev.filter((p) => p.id !== newPreference.id), newPreference])
+        } else if (payload.table === "schedule_entries") {
+          const newEntry = {
+            id: payload.new.id,
+            employeeId: payload.new.employee_id,
+            date: payload.new.date,
+            status: payload.new.status,
+            hours: payload.new.hours,
+            createdAt: payload.new.created_at,
+          }
+          setScheduleEntries((prev) => [...prev.filter((e) => e.id !== newEntry.id), newEntry])
+        } else if (payload.table === "schedule_settings") {
+          const newSettings = {
+            id: payload.new.id,
+            minEmployeesPerDay: payload.new.min_employees_per_day,
+            maxGenerationAttempts: payload.new.max_generation_attempts,
+            autoGenerationEnabled: payload.new.auto_generation_enabled,
+            autoGenerationDay: payload.new.auto_generation_day,
+            autoGenerationTime: payload.new.auto_generation_time,
+            createdAt: payload.new.created_at,
+          }
+          setSettings(newSettings)
+        }
+      },
+      (payload) => {
+        // Обработка обновления данных
+        if (payload.table === "employees") {
+          const updatedEmployee = {
+            id: payload.new.id,
+            name: payload.new.name,
+            color: payload.new.color,
+            telegramUsername: payload.new.telegram_username,
+            maxWorkDays: payload.new.max_work_days,
+            minOffDays: payload.new.min_off_days,
+            workDayReminderTime: payload.new.work_day_reminder_time,
+            scheduleReadyReminderTime: payload.new.schedule_ready_reminder_time,
+            scheduleReadyReminderDay: payload.new.schedule_ready_reminder_day,
+            workScheduleMode: payload.new.work_schedule_mode,
+            fixedWorkDays: payload.new.fixed_work_days,
+            fixedOffDays: payload.new.fixed_off_days,
+            password: payload.new.password,
+            isAdmin: payload.new.is_admin,
+            createdAt: payload.new.created_at,
+          }
+          setEmployees((prev) => prev.map((e) => (e.id === updatedEmployee.id ? updatedEmployee : e)))
+        } else if (payload.table === "day_preferences") {
+          const updatedPreference = {
+            id: payload.new.id,
+            employeeId: payload.new.employee_id,
+            date: payload.new.date,
+            dayOfWeek: payload.new.day_of_week,
+            isPreferred: payload.new.is_preferred,
+            createdAt: payload.new.created_at,
+          }
+          setDayPreferences((prev) => prev.map((p) => (p.id === updatedPreference.id ? updatedPreference : p)))
+        } else if (payload.table === "schedule_entries") {
+          const updatedEntry = {
+            id: payload.new.id,
+            employeeId: payload.new.employee_id,
+            date: payload.new.date,
+            status: payload.new.status,
+            hours: payload.new.hours,
+            createdAt: payload.new.created_at,
+          }
+          setScheduleEntries((prev) => prev.map((e) => (e.id === updatedEntry.id ? updatedEntry : e)))
+        } else if (payload.table === "schedule_settings") {
+          const updatedSettings = {
+            id: payload.new.id,
+            minEmployeesPerDay: payload.new.min_employees_per_day,
+            maxGenerationAttempts: payload.new.max_generation_attempts,
+            autoGenerationEnabled: payload.new.auto_generation_enabled,
+            autoGenerationDay: payload.new.auto_generation_day,
+            autoGenerationTime: payload.new.auto_generation_time,
+            createdAt: payload.new.created_at,
+          }
+          setSettings(updatedSettings)
+        }
+      },
+      (payload) => {
+        // Обработка удаления данных
+        if (payload.table === "employees") {
+          setEmployees((prev) => prev.filter((e) => e.id !== payload.old.id))
+        } else if (payload.table === "day_preferences") {
+          setDayPreferences((prev) => prev.filter((p) => p.id !== payload.old.id))
+        } else if (payload.table === "schedule_entries") {
+          setScheduleEntries((prev) => prev.filter((e) => e.id !== payload.old.id))
+        } else if (payload.table === "schedule_settings") {
+          // Обычно настройки не удаляются, но на всякий случай
+          setSettings(null)
+        }
+      },
+    )
+
+    return () => {
+      unsubscribe()
+    }
   }, [toast])
 
   // Обновление дат недели при изменении выбранной даты
@@ -172,26 +308,86 @@ export default function ScheduleModule() {
 
   // Обработчик изменения сотрудников
   const handleEmployeesChange = async (updatedEmployees: Employee[]) => {
-    setEmployees(updatedEmployees)
-    await saveEmployees(updatedEmployees)
+    try {
+      const success = await saveEmployees(updatedEmployees)
+      if (success) {
+        setEmployees(updatedEmployees)
+        toast({
+          title: "Успешно",
+          description: "Данные сотрудников сохранены",
+        })
+      }
+    } catch (error) {
+      console.error("Error saving employees:", error)
+      toast({
+        title: "Ошибка",
+        description: "Не удалось сохранить данные сотрудников",
+        variant: "destructive",
+      })
+    }
   }
 
   // Обработчик изменения предпочтений
   const handleDayPreferencesChange = async (updatedPreferences: DayPreference[]) => {
-    setDayPreferences(updatedPreferences)
-    await saveDayPreferences(updatedPreferences)
+    try {
+      const success = await saveDayPreferences(updatedPreferences)
+      if (success) {
+        setDayPreferences(updatedPreferences)
+        toast({
+          title: "Успешно",
+          description: "Предпочтения сохранены",
+        })
+      }
+    } catch (error) {
+      console.error("Error saving day preferences:", error)
+      toast({
+        title: "Ошибка",
+        description: "Не удалось сохранить предпочтения",
+        variant: "destructive",
+      })
+    }
   }
 
   // Обработчик изменения записей графика
   const handleScheduleEntriesChange = async (updatedEntries: ScheduleEntry[]) => {
-    setScheduleEntries(updatedEntries)
-    await saveScheduleEntries(updatedEntries)
+    try {
+      const success = await saveScheduleEntries(updatedEntries)
+      if (success) {
+        setScheduleEntries(updatedEntries)
+        toast({
+          title: "Успешно",
+          description: "График сохранен",
+        })
+      }
+    } catch (error) {
+      console.error("Error saving schedule entries:", error)
+      toast({
+        title: "Ошибка",
+        description: "Не удалось сохранить график",
+        variant: "destructive",
+      })
+    }
   }
 
   // Обработчик изменения настроек
   const handleSettingsChange = async (updatedSettings: ScheduleSettings) => {
-    setSettings(updatedSettings)
-    await saveScheduleSettings(updatedSettings)
+    try {
+      const success = await saveScheduleSettings(updatedSettings)
+      if (success) {
+        setSettings(updatedSettings)
+        toast({
+          title: "Успешно",
+          description: "Настройки сохранены",
+        })
+      }
+    } catch (error) {
+      console.error("Error saving settings:", error)
+      toast({
+        title: "Ошибка",
+        description: "Не удалось сохранить настройки",
+        variant: "destructive",
+      })
+    }
   }
 
   // Если данные еще загружаются, показываем индикатор загрузки

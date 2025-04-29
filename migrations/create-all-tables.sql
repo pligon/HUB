@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS employees (
   fixed_off_days INTEGER[],
   password TEXT,
   is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+  registration_code TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -41,10 +42,21 @@ CREATE TABLE IF NOT EXISTS schedule_entries (
 CREATE TABLE IF NOT EXISTS schedule_settings (
   id TEXT PRIMARY KEY,
   min_employees_per_day INTEGER NOT NULL,
-  max_generation_attempts INTEGER NOT NULL, -- Используем max_generation_attempts вместо exact_employees_per_day
+  employees_per_day INTEGER NOT NULL,
   auto_generation_enabled BOOLEAN NOT NULL,
   auto_generation_day INTEGER NOT NULL,
   auto_generation_time TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Создание таблицы для пользователей Telegram
+CREATE TABLE IF NOT EXISTS telegram_users (
+  id BIGINT PRIMARY KEY,
+  username TEXT,
+  first_name TEXT,
+  last_name TEXT,
+  chat_id BIGINT NOT NULL,
+  employee_id TEXT REFERENCES employees(id) ON DELETE SET NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -53,18 +65,21 @@ CREATE INDEX IF NOT EXISTS idx_day_preferences_employee_id ON day_preferences(em
 CREATE INDEX IF NOT EXISTS idx_day_preferences_date ON day_preferences(date);
 CREATE INDEX IF NOT EXISTS idx_schedule_entries_employee_id ON schedule_entries(employee_id);
 CREATE INDEX IF NOT EXISTS idx_schedule_entries_date ON schedule_entries(date);
+CREATE INDEX IF NOT EXISTS idx_telegram_users_employee_id ON telegram_users(employee_id);
 
 -- Добавление разрешений для RLS (Row Level Security)
 ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE day_preferences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE schedule_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE schedule_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE telegram_users ENABLE ROW LEVEL SECURITY;
 
 -- Создание политик доступа
 CREATE POLICY "Публичный доступ к сотрудникам" ON employees FOR SELECT USING (true);
 CREATE POLICY "Публичный доступ к предпочтениям" ON day_preferences FOR SELECT USING (true);
 CREATE POLICY "Публичный доступ к графику" ON schedule_entries FOR SELECT USING (true);
 CREATE POLICY "Публичный доступ к настройкам" ON schedule_settings FOR SELECT USING (true);
+CREATE POLICY "Публичный доступ к пользователям Telegram" ON telegram_users FOR SELECT USING (true);
 
 -- Создание политик для изменения данных (только для аутентифицированных пользователей)
 CREATE POLICY "Изменение сотрудников для аутентифицированных" ON employees 
@@ -74,4 +89,6 @@ CREATE POLICY "Изменение предпочтений для аутенти
 CREATE POLICY "Изменение графика для аутентифицированных" ON schedule_entries 
   FOR ALL USING (auth.role() = 'authenticated');
 CREATE POLICY "Изменение настроек для аутентифицированных" ON schedule_settings 
+  FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Изменение пользователей Telegram для аутентифицированных" ON telegram_users 
   FOR ALL USING (auth.role() = 'authenticated');

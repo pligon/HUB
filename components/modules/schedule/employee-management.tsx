@@ -22,8 +22,11 @@ import {
 import { UserPlus, UserMinus, Lock, Edit } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import type { Employee, WorkScheduleMode } from "@/lib/types/schedule-types"
-import { generateId } from "@/lib/db-schedule"
+import { generateId, addEmployee, updateEmployee, deleteEmployee } from "@/lib/db-schedule"
 import EmployeeNotifications from "./employee-notifications"
+
+// Добавляем импорт BotStatusDisplay
+import BotStatusDisplay from "./bot-status-display"
 
 // Цветовые опции для сотрудников
 const colorOptions = [
@@ -65,6 +68,7 @@ const emptyEmployee: Employee = {
   password: "",
   isAdmin: false,
   createdAt: new Date().toISOString(),
+  chat_id: undefined,
 }
 
 interface EmployeeManagementProps {
@@ -82,7 +86,7 @@ export default function EmployeeManagement({ employees, isAdmin, onEmployeesChan
   const { toast } = useToast()
 
   // Обработчик добавления сотрудника
-  const handleAddEmployee = () => {
+  const handleAddEmployee = async () => {
     if (!isAdmin) {
       toast({
         title: "Доступ запрещен",
@@ -154,16 +158,31 @@ export default function EmployeeManagement({ employees, isAdmin, onEmployeesChan
       createdAt: new Date().toISOString(),
     }
 
-    const updatedEmployees = [...employees, employee]
-    onEmployeesChange(updatedEmployees)
+    try {
+      // Добавляем сотрудника напрямую в базу данных
+      const success = await addEmployee(employee)
 
-    setNewEmployee({ ...emptyEmployee })
-    setIsAddEmployeeOpen(false)
+      if (success) {
+        // Обновляем локальное состояние
+        const updatedEmployees = [...employees, employee]
+        onEmployeesChange(updatedEmployees)
 
-    toast({
-      title: "Успешно",
-      description: "Сотрудник добавлен",
-    })
+        setNewEmployee({ ...emptyEmployee })
+        setIsAddEmployeeOpen(false)
+
+        toast({
+          title: "Успешно",
+          description: "Сотрудник добавлен",
+        })
+      }
+    } catch (error) {
+      console.error("Error adding employee:", error)
+      toast({
+        title: "Ошибка",
+        description: "Не удалось добавить сотрудника",
+        variant: "destructive",
+      })
+    }
   }
 
   // Обработчик редактирования сотрудника
@@ -195,7 +214,7 @@ export default function EmployeeManagement({ employees, isAdmin, onEmployeesChan
   }
 
   // Обработчик сохранения отредактированного сотрудника
-  const handleSaveEditedEmployee = () => {
+  const handleSaveEditedEmployee = async () => {
     if (!editingEmployee) return
 
     // Проверка настроек в зависимости от типа графика
@@ -235,21 +254,35 @@ export default function EmployeeManagement({ employees, isAdmin, onEmployeesChan
       }
     }
 
-    // Обновляем сотрудника в списке
-    const updatedEmployees = employees.map((emp) => (emp.id === editingEmployee.id ? editingEmployee : emp))
-    onEmployeesChange(updatedEmployees)
+    try {
+      // Обновляем сотрудника напрямую в базе данных
+      const success = await updateEmployee(editingEmployee)
 
-    setEditingEmployee(null)
-    setIsEditEmployeeOpen(false)
+      if (success) {
+        // Обновляем локальное состояние
+        const updatedEmployees = employees.map((emp) => (emp.id === editingEmployee.id ? editingEmployee : emp))
+        onEmployeesChange(updatedEmployees)
 
-    toast({
-      title: "Успешно",
-      description: "Данные сотрудника обновлены",
-    })
+        setEditingEmployee(null)
+        setIsEditEmployeeOpen(false)
+
+        toast({
+          title: "Успешно",
+          description: "Данные сотрудника обновлены",
+        })
+      }
+    } catch (error) {
+      console.error("Error updating employee:", error)
+      toast({
+        title: "Ошибка",
+        description: "Не удалось обновить данные сотрудника",
+        variant: "destructive",
+      })
+    }
   }
 
   // Обработчик удаления сотрудника
-  const handleDeleteEmployee = (id: string) => {
+  const handleDeleteEmployee = async (id: string) => {
     if (!isAdmin) {
       toast({
         title: "Доступ запрещен",
@@ -259,13 +292,28 @@ export default function EmployeeManagement({ employees, isAdmin, onEmployeesChan
       return
     }
 
-    const updatedEmployees = employees.filter((emp) => emp.id !== id)
-    onEmployeesChange(updatedEmployees)
+    try {
+      // Удаляем сотрудника напрямую из базы данных
+      const success = await deleteEmployee(id)
 
-    toast({
-      title: "Успешно",
-      description: "Сотрудник удален",
-    })
+      if (success) {
+        // Обновляем локальное состояние
+        const updatedEmployees = employees.filter((emp) => emp.id !== id)
+        onEmployeesChange(updatedEmployees)
+
+        toast({
+          title: "Успешно",
+          description: "Сотрудник удален",
+        })
+      }
+    } catch (error) {
+      console.error("Error deleting employee:", error)
+      toast({
+        title: "Ошибка",
+        description: "Не удалось удалить сотрудника",
+        variant: "destructive",
+      })
+    }
   }
 
   // Обработчик переключения дня для фиксированного графика (для нового сотрудника)
@@ -362,9 +410,11 @@ export default function EmployeeManagement({ employees, isAdmin, onEmployeesChan
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-2">
+        {/* В компоненте EmployeeManagement обновляем TabsList, добавляя вкладку "Статус бота" */}
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="employees">Сотрудники</TabsTrigger>
           <TabsTrigger value="notifications">Уведомления</TabsTrigger>
+          <TabsTrigger value="bot-status">Статус бота</TabsTrigger>
         </TabsList>
 
         <TabsContent value="employees" className="mt-4">
@@ -443,6 +493,11 @@ export default function EmployeeManagement({ employees, isAdmin, onEmployeesChan
 
         <TabsContent value="notifications" className="mt-4">
           <EmployeeNotifications employees={employees} isAdmin={isAdmin} />
+        </TabsContent>
+
+        {/* Добавляем содержимое для новой вкладки */}
+        <TabsContent value="bot-status" className="mt-4">
+          <BotStatusDisplay />
         </TabsContent>
       </Tabs>
 
@@ -629,6 +684,20 @@ export default function EmployeeManagement({ employees, isAdmin, onEmployeesChan
                 value={newEmployee.password}
                 onChange={(e) => setNewEmployee({ ...newEmployee, password: e.target.value })}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="chat-id">Chat ID в Telegram</Label>
+              <Input
+                id="chat-id"
+                type="number"
+                value={newEmployee.chat_id || ""}
+                onChange={(e) =>
+                  setNewEmployee({ ...newEmployee, chat_id: e.target.value ? Number(e.target.value) : undefined })
+                }
+                placeholder="Введите Chat ID"
+              />
+              <p className="text-xs text-gray-500">Идентификатор чата для отправки уведомлений</p>
             </div>
 
             <div className="flex items-center space-x-2">
@@ -841,6 +910,23 @@ export default function EmployeeManagement({ employees, isAdmin, onEmployeesChan
                   onChange={(e) => setEditingEmployee({ ...editingEmployee, password: e.target.value })}
                   placeholder="Оставьте пустым, чтобы не менять"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-chat-id">Chat ID в Telegram</Label>
+                <Input
+                  id="edit-chat-id"
+                  type="number"
+                  value={editingEmployee.chat_id || ""}
+                  onChange={(e) =>
+                    setEditingEmployee({
+                      ...editingEmployee,
+                      chat_id: e.target.value ? Number(e.target.value) : undefined,
+                    })
+                  }
+                  placeholder="Введите Chat ID"
+                />
+                <p className="text-xs text-gray-500">Идентификатор чата для отправки уведомлений</p>
               </div>
 
               <div className="flex items-center space-x-2">

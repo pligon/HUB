@@ -1,12 +1,7 @@
-// Типы данных для модуля "График бар"
-
-// Режим работы сотрудника
+import type React from "react"
 export type WorkScheduleMode = "5/2" | "flexible" | "fixed"
+export type ShiftStatus = 0 | 1 | 11 // 0 - выходной, 1 - рабочий день, 11 - рабочий день (подтвержден)
 
-// Статус смены
-export type ShiftStatus = 0 | 1 | 11 // 0 = выходной, 1 = рабочий день (12ч), 11 = сокращенный (11ч)
-
-// Сотрудник
 export interface Employee {
   id: string
   name: string
@@ -14,48 +9,124 @@ export interface Employee {
   telegramUsername?: string
   maxWorkDays: number
   minOffDays: number
-  workDayReminderTime?: string // Время напоминания о рабочем дне (HH:MM)
-  scheduleReadyReminderTime?: string // Время напоминания о готовности графика (HH:MM)
-  scheduleReadyReminderDay?: number // День недели для напоминания о готовности графика (0-6)
+  workDayReminderTime?: string
+  scheduleReadyReminderTime?: string
+  scheduleReadyReminderDay?: number
   workScheduleMode: WorkScheduleMode
-  fixedWorkDays?: number[] // Дни недели (0-6), когда сотрудник работает (для фиксированного графика)
-  fixedOffDays?: number[] // Дни недели (0-6), когда у сотрудника выходной (для гибкого графика)
-  password?: string // Личный пароль сотрудника
+  fixedWorkDays?: number[]
+  fixedOffDays?: number[]
+  password?: string
   isAdmin: boolean
   createdAt: string
-  registration_code?: string // Код регистрации для Telegram
+  registration_code?: string
+  chat_id?: number
 }
 
-// Предпочтения по выходным дням
 export interface DayPreference {
   id: string
   employeeId: string
-  date: string // ISO формат даты (YYYY-MM-DD)
-  dayOfWeek: number // День недели (0-6)
-  isPreferred: boolean // true = предпочитаемый выходной
+  date: string
+  dayOfWeek: number
+  isPreferred: boolean
   createdAt: string
 }
 
-// Запись в графике
 export interface ScheduleEntry {
   id: string
   employeeId: string
-  date: string // ISO формат даты (YYYY-MM-DD)
+  date: string
   status: ShiftStatus
-  hours?: number // Количество часов в смене (по умолчанию 12 для будней, 11 для выходных)
+  hours?: number
   createdAt: string
 }
 
-// Настройки генерации графика
 export interface ScheduleSettings {
   id: string
-  minEmployeesPerDay: number // Минимальное количество сотрудников в день
-  maxGenerationAttempts: number // Количество попыток на поиск лучшего варианта
-  autoGenerationEnabled: boolean // Включено ли автоматическое формирование графика
-  autoGenerationDay: number // День недели для автоматического формирования (0-6)
-  autoGenerationTime: string // Время автоматического формирования (HH:MM)
+  minEmployeesPerDay: number
+  exactEmployeesPerDay: number
+  autoGenerationEnabled: boolean
+  autoGenerationDay: number
+  autoGenerationTime: string
+  generationAttempts: number
   createdAt: string
 }
 
-// Токен Telegram бота
-export const TELEGRAM_BOT_TOKEN = "7728971043:AAFAzIWUNCQN1OI5dFxFpDmJc-45SUBlwoA"
+export interface ScheduleDay {
+  date: string
+  dayOfWeek: number
+  dayOfMonth: number
+  month: number
+  year: number
+  employees: ScheduleDayEmployee[]
+  isToday: boolean
+  isWeekend: boolean
+}
+
+export interface ScheduleDayEmployee {
+  id: string
+  name: string
+  color: string
+  status: ShiftStatus
+  hours?: number
+}
+
+export interface ScheduleWeek {
+  startDate: string
+  endDate: string
+  days: ScheduleDay[]
+}
+
+export interface ScheduleMonth {
+  month: number
+  year: number
+  name: string
+  weeks: ScheduleWeek[]
+}
+
+export interface ScheduleState {
+  employees: Employee[]
+  dayPreferences: DayPreference[]
+  scheduleEntries: ScheduleEntry[]
+  settings: ScheduleSettings
+  isLoading: boolean
+  error: string | null
+}
+
+export interface ScheduleAction {
+  type: string
+  payload?: any
+}
+
+export interface ScheduleContextType {
+  state: ScheduleState
+  dispatch: React.Dispatch<ScheduleAction>
+  refreshData: () => Promise<void>
+}
+
+export interface EmployeeFormData {
+  name: string
+  color: string
+  telegramUsername: string
+  maxWorkDays: number
+  minOffDays: number
+  workDayReminderTime: string
+  scheduleReadyReminderTime: string
+  scheduleReadyReminderDay: number
+  workScheduleMode: WorkScheduleMode
+  fixedWorkDays: number[]
+  fixedOffDays: number[]
+  password: string
+  isAdmin: boolean
+  chat_id?: number
+}
+
+export interface ScheduleSettingsFormData {
+  minEmployeesPerDay: number
+  exactEmployeesPerDay: number
+  autoGenerationEnabled: boolean
+  autoGenerationDay: number
+  autoGenerationTime: string
+  generationAttempts: number
+}
+
+export const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "7728971043:AAFAzIWUNCQN1OI5dFxFpDmJc-45SUBlwoA"
